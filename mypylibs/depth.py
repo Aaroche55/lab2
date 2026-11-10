@@ -79,7 +79,7 @@ def depth_map(img1, img2, K, D, R, t, baseline_cm, matcher):
     return depth, left_color, projection
 
 
-def write_point_cloud(path, depth, image, projection, step=3):
+def write_point_cloud(path, depth, image, projection, step=1):
     """Save one depth image as a coloured ASCII PLY point cloud (coordinates in cm)."""
     fx, fy = projection[0, 0], projection[1, 1]
     cx, cy = projection[0, 2], projection[1, 2]
