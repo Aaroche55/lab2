@@ -30,6 +30,16 @@ def sharpness(gray):
     return cv2.Laplacian(gray, cv2.CV_64F).var()
 
 
+def find_corners(gray, pattern=PATTERN):
+    """Find and refine checkerboard inner corners in one grayscale frame."""
+    found, corners = cv2.findChessboardCorners(gray, pattern)
+    if not found:
+        return None
+
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+    return cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
+
+
 def extract_calibration_frames(path, n=20, pattern=PATTERN, out_dir=None):
     """Return (indices, frames) of n sharp frames showing the checkerboard.
 
@@ -66,5 +76,17 @@ if __name__ == '__main__':
     video = os.path.join('in', '01_calibration.mp4')
     out_dir = os.path.join('out', '01_calibration')
     indices, frames = extract_calibration_frames(video, out_dir=out_dir)
-    print(f'Saved {len(frames)} frames to {out_dir}: {indices}')
+    detected = 0
+    for index, frame in zip(indices, frames):
+        gray = to_grayscale(frame)
+        corners = find_corners(gray)
+        if corners is None:
+            continue
+
+        detected += 1
+        preview = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+        cv2.drawChessboardCorners(preview, PATTERN, corners, True)
+        cv2.imwrite(os.path.join(out_dir, f'corners_{index:04}.png'), preview)
+
+    print(f'Saved {len(frames)} grayscale frames and detected corners in {detected} to {out_dir}: {indices}')
 
