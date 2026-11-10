@@ -1,26 +1,27 @@
-
-import yaml
-
-from PIL import Image
 from os import path as opath
+
+from mypylibs.calibration import calibrate
 
 ROOT_IN = 'in'
 ROOT_OUT = 'out'
-EXT = 'png'
 
-def main(case: int):
 
-    img = Image.open(opath.join(ROOT_IN, f'{case:02}.{EXT}'))
-    with open(opath.join(ROOT_IN, f'{case:02}.yaml')) as f:
-        params = yaml.safe_load(f)
-    
+def main(camera: int):
+
+    cam = f'{camera:02}'
+    video = opath.join(ROOT_IN, f'{cam}_calibration.mp4')
+    if not opath.exists(video):
+        raise FileNotFoundError(video)
+
+    K, D, error = calibrate(video, ROOT_OUT, cam)
+
 
 if __name__ == '__main__':
 
-    case = 0
+    camera = 0
     while(True):
-        case += 1
+        camera += 1
         try:
-            main(case)
+            main(camera)
         except FileNotFoundError:
             break
