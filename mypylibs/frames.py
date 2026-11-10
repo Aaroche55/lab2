@@ -21,6 +21,10 @@ def read_frames(path):
     return frames
 
 
+def to_grayscale(frame):
+    return cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+
 def sharpness(gray):
     # Variance of the Laplacian: blurry images have few strong edges -> low variance
     return cv2.Laplacian(gray, cv2.CV_64F).var()
@@ -53,6 +57,14 @@ def extract_calibration_frames(path, n=20, pattern=PATTERN, out_dir=None):
     if out_dir is not None:
         os.makedirs(out_dir, exist_ok=True)
         for i in indices:
-            cv2.imwrite(os.path.join(out_dir, f'frame_{i:04}.png'), frames[i])
+            cv2.imwrite(os.path.join(out_dir, f'frame_{i:04}.png'), to_grayscale(frames[i]))
 
     return indices, [frames[i] for i in indices]
+
+
+if __name__ == '__main__':
+    video = os.path.join('in', '01_calibration.mp4')
+    out_dir = os.path.join('out', '01_calibration')
+    indices, frames = extract_calibration_frames(video, out_dir=out_dir)
+    print(f'Saved {len(frames)} frames to {out_dir}: {indices}')
+
