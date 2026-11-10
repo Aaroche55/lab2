@@ -1,21 +1,23 @@
 from os import path as opath
 
 from mypylibs.calibration import calibrate
+from mypylibs.depth import scene_depth_video
 from mypylibs.pose import estimate_scene_poses
 
 ROOT_IN = 'in'
 ROOT_OUT = 'out'
 
 
-def process_scenes(camera: str, K):
-    """Run step 5 (inter-frame pose) on every scene video for this camera."""
+def process_scenes(camera: str, K, D):
+    """Run step 5 (inter-frame pose) and step 6 (depth video) on every scene video for this camera."""
     scene = 0
     while True:
         scene += 1
         video = opath.join(ROOT_IN, f'{camera}_{scene:02}.mp4')
         if not opath.exists(video):
             break
-        estimate_scene_poses(video, K)
+        poses = estimate_scene_poses(video, K)
+        scene_depth_video(video, poses, K, D, opath.join(ROOT_OUT, f'{camera}-{scene:02}.mp4'))
 
 
 def main(camera: int):
@@ -26,7 +28,7 @@ def main(camera: int):
         raise FileNotFoundError(video)
 
     K, D, error = calibrate(video, ROOT_OUT, cam)
-    process_scenes(cam, K)
+    process_scenes(cam, K, D)
 
 
 if __name__ == '__main__':

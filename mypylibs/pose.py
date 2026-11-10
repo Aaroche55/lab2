@@ -6,6 +6,9 @@ from mypylibs.frames import read_frames, to_grayscale
 # Lowe ratio test: keep a match only if it is clearly better than the 2nd-best
 RATIO = 0.75
 MIN_MATCHES = 8
+# Frames between the two images of a pair: consecutive frames (GAP=1) barely
+# move at 30fps, which makes the Essential matrix and the disparities unreliable
+GAP = 20
 
 
 def match_frames(gray1, gray2):
@@ -48,9 +51,9 @@ def estimate_scene_poses(video, K):
         raise ValueError(f'{video}: need at least 2 frames')
 
     poses = []
-    for i in range(len(frames) - 1):
+    for i in range(len(frames) - GAP):
         gray1 = to_grayscale(frames[i])
-        gray2 = to_grayscale(frames[i + 1])
+        gray2 = to_grayscale(frames[i + GAP])
         pts1, pts2 = match_frames(gray1, gray2)
         if pts1 is None:
             continue
@@ -61,11 +64,11 @@ def estimate_scene_poses(video, K):
 
         poses.append({
             'frame_i': i,
-            'frame_j': i + 1,
+            'frame_j': i + GAP,
             'R': R,
             't': t,
             'inliers': n_inliers,
         })
 
-    print(f'{video}: recovered pose for {len(poses)}/{len(frames) - 1} frame pairs')
+    print(f'{video}: recovered pose for {len(poses)}/{len(frames) - GAP} frame pairs')
     return poses
