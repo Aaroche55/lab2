@@ -16,13 +16,13 @@ jobs:
         run: |
           docker run --rm \
           -v ${{ github.workspace }}:/workspace \
-          jfhernandeza/ul-cs6524-cv-python-latex:lab01 python main.py
+          jfhernandeza/ul-cs6524-cv-python-latex:opencv python main.py
       
       - name: Compile LaTeX Document (report.tex)
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
-            jfhernandeza/ul-cs6524-cv-python-latex:lab01 latexmk -pdf -interaction=nonstopmode -halt-on-error report.tex
+            jfhernandeza/ul-cs6524-cv-python-latex:opencv latexmk -pdf -interaction=nonstopmode -halt-on-error report.tex
       
       - name: Upload Report and Output Artifacts
         uses: actions/upload-artifact@v4
