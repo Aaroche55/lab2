@@ -54,27 +54,53 @@ def rectify_pair(img1, img2, K, D, R, t):
     map2 = cv2.initUndistortRectifyMap(K, D, R2, P2, (w, h), cv2.CV_32FC1)
     rect1 = cv2.remap(img1, *map1, cv2.INTER_LINEAR)
     rect2 = cv2.remap(img2, *map2, cv2.INTER_LINEAR)
-    return rect1, rect2, P2
+    return rect1, rect2, P1, P2
 
 
 def depth_map(img1, img2, K, D, R, t, baseline_cm, matcher):
     """Depth in cm, Z = f * B / d, in the rectified view of img1."""
-    gray1, gray2 = to_grayscale(img1), to_grayscale(img2)
-    rect1, rect2, P2 = rectify_pair(gray1, gray2, K, D, R, t)
+    rect1, rect2, P1, P2 = rectify_pair(img1, img2, K, D, R, t)
+    gray1, gray2 = to_grayscale(rect1), to_grayscale(rect2)
 
     # P2[0, 3] = -f * Tx: positive means the second camera sits to the left,
     # so it has to be passed as the left image for disparities to be positive
     if P2[0, 3] > 0:
         disp = matcher.compute(rect2, rect1)
+        left_color, projection = rect2, P2
     else:
         disp = matcher.compute(rect1, rect2)
+        left_color, projection = rect1, P1
     disp = disp.astype(np.float32) / 16.0  # SGBM returns fixed-point disparities
 
     f = P2[0, 0]
     depth = np.full(disp.shape, np.nan, np.float32)
     valid = disp > 0
     depth[valid] = f * baseline_cm / disp[valid]
-    return depth
+    return depth, left_color, projection
+
+
+def write_point_cloud(path, depth, image, projection, step=3):
+    """Save one depth image as a coloured ASCII PLY point cloud (coordinates in cm)."""
+    fx, fy = projection[0, 0], projection[1, 1]
+    cx, cy = projection[0, 2], projection[1, 2]
+    height, width = depth.shape
+    ys, xs = np.mgrid[0:height:step, 0:width:step]
+    z = depth[::step, ::step]
+    valid = np.isfinite(z) & (z > 0) & (z <= DEPTH_MAX_CM)
+    xs, ys, z = xs[valid].astype(np.float32), ys[valid].astype(np.float32), z[valid]
+    colors = image[::step, ::step][valid][:, ::-1]  # PLY stores RGB, OpenCV uses BGR
+    x = (xs - cx) * z / fx
+    y = (ys - cy) * z / fy
+    points = np.column_stack((x, y, z))
+
+    with open(path, 'w', encoding='ascii') as ply:
+        ply.write('ply\nformat ascii 1.0\n')
+        ply.write(f'element vertex {len(points)}\n')
+        ply.write('property float x\nproperty float y\nproperty float z\n')
+        ply.write('property uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n')
+        for (px, py, pz), (red, green, blue) in zip(points, colors):
+            ply.write(f'{px:.3f} {py:.3f} {pz:.3f} {int(red)} {int(green)} {int(blue)}\n')
+    print(f'{path}: saved {len(points)} coloured points')
 
 
 class DepthVideoWriter:
@@ -113,10 +139,17 @@ def scene_depth_video(video, poses, K, D, out_path):
     matcher = make_matcher()
 
     writer = DepthVideoWriter(out_path, fps, frames[0].shape[:2])
+    cloud_saved = False
+    cloud_path = os.path.splitext(out_path)[0] + '.ply'
     for pose in poses:
         i, j = pose['frame_i'], pose['frame_j']
         baseline_cm = cm_per_frame * (j - i)
-        depth = depth_map(frames[i], frames[j], K, D, pose['R'], pose['t'], baseline_cm, matcher)
+        depth, cloud_image, projection = depth_map(
+            frames[i], frames[j], K, D, pose['R'], pose['t'], baseline_cm, matcher
+        )
+        if not cloud_saved:
+            write_point_cloud(cloud_path, depth, cloud_image, projection)
+            cloud_saved = True
         writer.write(depth, f'Frames {i}-{j}')
     writer.close()
 
