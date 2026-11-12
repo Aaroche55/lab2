@@ -1,107 +1,124 @@
 \documentclass[conference]{assets/latex/IEEEtran}
-\IEEEoverridecommandlockouts
-% The preceding line is only needed to identify funding in the first footnote. If that is unneeded, please comment it out.
-%Template version as of 6/27/2024
 
 \usepackage{amsmath,amssymb,amsfonts}
-\usepackage{algorithmic}
 \usepackage{graphicx}
-\usepackage{textcomp}
-\usepackage{xcolor}
-\usepackage[backend=biber,style=numeric]{biblatex}
-\addbibresource{assets/latex/report.bib} 
 
- \graphicspath{{assets/latex/}}
+\graphicspath{{assets/latex/}}
 
 \begin{document}
 
-\title{CS6524 Computer Vision Lab. 2\\ Camera Calibration and Stereo Vision}
+\title{CS6524 Computer Vision Lab.~2\\
+Camera Calibration and Stereo Vision}
 
-\author{\IEEEauthorblockN{1\textsuperscript{st} Given Name Surname}
-\IEEEauthorblockA{\textit{dept. name of organization (of Aff.)} \\
-\textit{name of organization (of Aff.)}\\
-City, Country \\
-email address or ORCID}
+\author{
+\IEEEauthorblockN{James Kelly}
+\IEEEauthorblockA{
+23370858\\
+Immersive Software Engineering\\
+University of Limerick, Ireland
+}
 \and
-\IEEEauthorblockN{2\textsuperscript{nd} Given Name Surname}
-\IEEEauthorblockA{\textit{dept. name of organization (of Aff.)} \\
-\textit{name of organization (of Aff.)}\\
-City, Country \\
-email address or ORCID}
+\IEEEauthorblockN{Aaron Roche}
+\IEEEauthorblockA{
+[Student ID]\\
+Immersive Software Engineering\\
+University of Limerick, Ireland
+}
 \and
-\IEEEauthorblockN{2\textsuperscript{nd} Given Name Surname}
-\IEEEauthorblockA{\textit{dept. name of organization (of Aff.)} \\
-\textit{name of organization (of Aff.)}\\
-City, Country \\
-email address or ORCID}
+\IEEEauthorblockN{James Doherty}
+\IEEEauthorblockA{
+[Student ID]\\
+Immersive Software Engineering\\
+University of Limerick, Ireland
+}
 }
 
 \maketitle
 
-\begin{abstract}
-Describe in few words the work done, the lessons learned, and results.
-\end{abstract}
-
 \section{Introduction}
-This document contains some examples of basic {\LaTeX} functions.
 
-\subsection{Lists}
+This lab investigates camera calibration and depth estimation
+using videos recorded on phone cameras. Checkerboard images
+are used to estimate camera intrinsics and lens distortion.
+Pairs of scene frames are then used to estimate camera motion
+and generate depth maps. Coloured point clouds are exported
+from selected depth frames to visualise the reconstructed scene.
 
-List can be bulleted\dots
-\begin{itemize}
-\item First
-\item Second
-\item Third
-\end{itemize}
 
-Or enumerated
+\section{Methodology}
 
-\begin{enumerate}
-\item First
-\item Second
-\item Third
-\end{enumerate}
+\subsection{Video Preparation}
 
-\subsection{Equations}
+Calibration videos were recorded using each member's phone.
+The checkerboard was mounted on a rigid surface to reduce
+warping, and different views of the board were captured.
+Separate scene videos were recorded using sideways camera
+movement around stationary objects at different depths.
 
-Equations can have their own environment,
-\begin{equation}
-a+b=\gamma\label{eq}
-\end{equation}
-and be reference (Equation~\ref{eq}), or can be inline and blend in the text like this: $\sum_{i=0}^{N}x_i$, like any other word.
+Twenty calibration frames were selected by dividing
+checkerboard detections into temporal bins and choosing
+the sharpest frame in each bin using Laplacian variance.
+This spread the selected frames throughout the recording
+rather than taking several similar neighbouring frames.
 
-\subsection{Figures and Tables}
 
-\begin{table}
-\caption{Table Type Styles}
-\begin{center}
-\begin{tabular}{|c|c|c|c|}
-\hline
-\textbf{Table}&\multicolumn{3}{|c|}{\textbf{Table Column Head}} \\
-\cline{2-4} 
-\textbf{Head} & \textbf{\textit{Table column subhead}}& \textbf{\textit{Subhead}}& \textbf{\textit{Subhead}} \\
-\hline
-copy& More table copy$^{\mathrm{a}}$& &  \\
-\hline
-\multicolumn{4}{l}{$^{\mathrm{a}}$Sample of a Table footnote.}
-\end{tabular}
-\label{tab1}
-\end{center}
-\end{table}
+\subsection{Corner Detection}
 
-\begin{figure}
-% Uncomment the line below to include an image from a source file
-\centerline{\includegraphics{fig1.png}}
-\caption{Example of a figure caption.}
-\label{fig}
+Each calibration frame was converted to grayscale before
+detecting corners with \texttt{cv2.findChessboardCorners}.
+The printed board contained $9\times6$ squares, giving
+an $8\times5$ inner-corner grid. The detector was configured
+to match this board rather than the $9\times6$ inner-corner
+dimensions stated in the brief.
+
+Detected corners were refined using
+\texttt{cv2.cornerSubPix} to obtain sub-pixel coordinates.
+These image points were passed to the calibration stage
+with their corresponding checkerboard object points.
+Figure~\ref{fig:corners} shows an example detection.
+
+\begin{figure}[!t]
+    \centering
+    \includegraphics[
+        width=0.75\columnwidth
+    ]{calib_corners.png}
+    \caption{Detected $8\times5$ inner-corner grid for
+    camera 01. The board was mounted on a rigid surface.}
+    \label{fig:corners}
 \end{figure}
 
-They appear by default on top of the text, and you reference like this: Figure~\ref{fig} and Table~\ref{tab1}.
+% Add the group's remaining methodology here.
 
-\subsection{Citations}
 
-If you need to cite external sources, use the \texttt{assets/latex/report.bib} file. As an example, here's how you cite the textbook~\cite{foundationsCVbook}.
+\subsection{Point-Cloud Export}
 
-\printbibliography
+One depth frame per scene was exported as a coloured
+ASCII PLY point cloud. The exporter compares the processed
+frame pairs and selects the one containing the most valid
+depth values within $0<Z\leq250$~cm.
+
+For each retained pixel $(u,v)$, its depth and the rectified
+projection parameters were used to calculate
+\begin{equation}
+X=\frac{(u-c_x)Z}{f_x},
+\qquad
+Y=\frac{(v-c_y)Z}{f_y}.
+\end{equation}
+
+Point colours were taken from the corresponding rectified
+image and converted from BGR to RGB. Each exported point
+contains its $X$, $Y$, and $Z$ coordinates and colour.
+Coordinates are in centimetres under the baseline assumption
+used by the depth calculation.
+
+Invalid depths and points beyond 250~cm were excluded.
+If no processed pair contains valid points within this range,
+the program reports a warning instead of exporting an
+empty cloud.
+
+
+\section{Discussion and Failure Analysis}
+
+% To be completed with the group's final results and analysis.
 
 \end{document}

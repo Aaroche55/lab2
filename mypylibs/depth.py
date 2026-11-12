@@ -130,27 +130,76 @@ class DepthVideoWriter:
         self.writer.release()
         plt.close(self.fig)
 
-
 def scene_depth_video(video, poses, K, D, out_path):
-    """Step 6: one depth map per frame pair from step 5, written as a video."""
+    """Generate a depth video and export the best-supported cloud frame."""
     frames = read_frames(video)
     fps = cv2.VideoCapture(video).get(cv2.CAP_PROP_FPS)
-    cm_per_frame = load_travel_cm(video) / (len(frames) - 1)  # assumes constant speed
+
+    cm_per_frame = load_travel_cm(video) / (len(frames) - 1)
     matcher = make_matcher()
 
     writer = DepthVideoWriter(out_path, fps, frames[0].shape[:2])
-    cloud_saved = False
     cloud_path = os.path.splitext(out_path)[0] + '.ply'
+
+    best_count = 0
+    best_cloud = None
+    best_pair = None
+
     for pose in poses:
         i, j = pose['frame_i'], pose['frame_j']
         baseline_cm = cm_per_frame * (j - i)
+
         depth, cloud_image, projection = depth_map(
-            frames[i], frames[j], K, D, pose['R'], pose['t'], baseline_cm, matcher
+            frames[i],
+            frames[j],
+            K,
+            D,
+            pose['R'],
+            pose['t'],
+            baseline_cm,
+            matcher,
         )
-        if not cloud_saved:
-            write_point_cloud(cloud_path, depth, cloud_image, projection)
-            cloud_saved = True
+
+        # Use the same validity filter as the point-cloud exporter.
+        valid = (
+            np.isfinite(depth)
+            & (depth > 0)
+            & (depth <= DEPTH_MAX_CM)
+        )
+        count = int(np.count_nonzero(valid))
+
+        if count > best_count:
+            best_count = count
+            best_cloud = (
+                depth.copy(),
+                cloud_image.copy(),
+                projection.copy(),
+            )
+            best_pair = (i, j)
+
         writer.write(depth, f'Frames {i}-{j}')
+
     writer.close()
 
-    print(f'{video}: wrote {out_path} (baseline {cm_per_frame:.3f} cm per frame)')
+    if best_cloud is not None:
+        write_point_cloud(cloud_path, *best_cloud)
+        print(
+            f'{video}: selected frames '
+            f'{best_pair[0]}-{best_pair[1]} '
+            f'with {best_count} valid cloud points'
+        )
+    else:
+        # Remove any empty or outdated cloud from an earlier run.
+        if os.path.exists(cloud_path):
+            os.remove(cloud_path)
+
+        print(
+            f'WARNING: {video}: no valid cloud points within '
+            f'0-{DEPTH_MAX_CM} cm in any processed pair. '
+            'No point cloud exported.'
+        )
+
+    print(
+        f'{video}: wrote {out_path} '
+        f'(baseline {cm_per_frame:.3f} cm per frame)'
+    )
