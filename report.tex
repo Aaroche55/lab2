@@ -93,28 +93,17 @@ Figure~\ref{fig:corners} shows an example detection.
 \subsection{Point-Cloud Export}
 
 One depth frame per scene was exported as a coloured
-ASCII PLY point cloud. The exporter compares the processed
-frame pairs and selects the one containing the most valid
-depth values within $0<Z\leq250$~cm.
+PLY point cloud. The exporter selects the frame pair
+with the most valid depth values within 250~cm.
 
-For each retained pixel $(u,v)$, its depth and the rectified
-projection parameters were used to calculate
-\begin{equation}
-X=\frac{(u-c_x)Z}{f_x},
-\qquad
-Y=\frac{(v-c_y)Z}{f_y}.
-\end{equation}
-
-Point colours were taken from the corresponding rectified
-image and converted from BGR to RGB. Each exported point
-contains its $X$, $Y$, and $Z$ coordinates and colour.
-Coordinates are in centimetres under the baseline assumption
-used by the depth calculation.
+The depth values and camera parameters were used to
+calculate the 3D position of each retained pixel.
+Colours were taken from the corresponding image
+and saved alongside the point coordinates.
 
 Invalid depths and points beyond 250~cm were excluded.
-If no processed pair contains valid points within this range,
-the program reports a warning instead of exporting an
-empty cloud.
+If no frame pair contains valid points, the program
+reports a warning instead of exporting an empty cloud.
 
 
 \section{Discussion and Failure Analysis}
