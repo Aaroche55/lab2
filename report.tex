@@ -27,7 +27,7 @@ University of Limerick, Ireland
 \and
 \IEEEauthorblockN{James Doherty}
 \IEEEauthorblockA{
-[Student ID]\\
+23374039\\
 Immersive Software Engineering\\
 University of Limerick, Ireland
 }
@@ -87,7 +87,56 @@ Figure~\ref{fig:corners} shows an example detection.
     \label{fig:corners}
 \end{figure}
 
-% Add the group's remaining methodology here.
+\subsection{Camera Calibration}
+
+Object points were defined on the $Z{=}0$ board plane using a
+square size of $2.5$\,cm, so all downstream quantities share a
+centimetre scale. Image and object points from the selected
+frames were passed to \texttt{cv2.calibrateCamera} to estimate
+the intrinsic matrix $K$ and distortion coefficients $D$.
+Both were written to CSV for each camera.
+
+Calibration quality was checked with the mean reprojection
+error: detected corners were compared with the 3D board points
+reprojected through the estimated parameters. OpenCV's RMS
+error was also recorded for reference.
+
+
+\subsection{Inter-Frame Pose Estimation}
+
+Scene videos were processed as temporal stereo pairs rather
+than consecutive frames. A fixed gap of 20 frames was used so
+that camera motion was large enough for a stable Essential
+matrix and measurable disparities at 30\,fps.
+
+SIFT keypoints and descriptors were extracted from each pair
+and matched with a brute-force L2 matcher. Lowe's ratio test
+($0.75$) discarded ambiguous matches; pairs with fewer than
+eight surviving matches were skipped.
+
+The Essential matrix was estimated with RANSAC and decomposed
+with \texttt{cv2.recoverPose} to recover the relative rotation
+$R$ and unit translation direction $t$. Only pairs that
+returned a valid pose were kept for depth estimation.
+
+
+\subsection{Depth Estimation}
+
+Because \texttt{recoverPose} recovers only the direction of
+$t$, metric scale was supplied externally. Each scene assumed
+a default camera travel of $30$\,cm across the clip, optionally
+overridden per scene with a YAML \texttt{travel\_cm} value.
+The assumed travel was spread evenly across the clip
+(\texttt{travel\_cm}/$(N{-}1)$ per frame step); the baseline for a
+pair was that value times the 20-frame gap.
+
+Each pose pair was stereo-rectified with the calibrated $K$
+and $D$ so that epipolar lines became horizontal scanlines.
+Disparity was computed with StereoSGBM, and depth followed
+$Z = fB/d$ in centimetres. Invalid or out-of-range values
+were masked, and each map was rendered as a turbo heatmap
+with a fixed $0$--$250$\,cm colour bar so the depth video
+did not flicker between frames.
 
 
 \subsection{Point-Cloud Export}
@@ -108,6 +157,43 @@ reports a warning instead of exporting an empty cloud.
 
 \section{Discussion and Failure Analysis}
 
-% To be completed with the group's final results and analysis.
+Calibration for camera~01 gave a usable $K$
+($f_x{\approx}586$, $f_y{\approx}586$, principal
+point near the centre on the $640{\times}360$ frames).
+Distortion was fairly strong
+($k_1{\approx}0.12$, $k_2{\approx}{-}0.45$), so
+undistorting before rectification helped.
+Scene~$01\_01$ produced a depth video and a point
+cloud with about 180{,}000 points, mostly between
+$12$ and $150$\,cm. That fits the short sideways walk
+for that clip (\texttt{travel\_cm}${}={}10$).
+
+Scale is the main problem. Pose recovery only gives
+a unit translation, so depth depends on a guessed
+travel distance. If the guess is wrong, every depth
+value is off by the same factor. Different scenes
+needed different YAML travel values ($10$\,cm vs
+$40$\,cm), so the $30$\,cm default is not enough on
+its own.
+
+Resolution mismatch also broke some runs. A few
+scene videos were left at $1920{\times}1080$ while
+calibration used $640{\times}360$. $K$ from one
+size does not work on the other, so those clips fail
+or give bad depth. Every video for a camera should
+be resized the same way first.
+
+Stereo matching left holes too. Flat or shiny areas
+give weak SGBM disparities, which show up as black
+patches and missing cloud points. The 20-frame gap
+helped pose, but pairs with too few SIFT matches are
+skipped, so some of the clip never appears in the
+depth video.
+
+With more time we would measure travel with a tape,
+keep one resolution per camera, and check that scene
+frame size matches calibration before pose runs.
+Putting a checkerboard in one scene frame would also
+let us check a few depths against a known distance.
 
 \end{document}
